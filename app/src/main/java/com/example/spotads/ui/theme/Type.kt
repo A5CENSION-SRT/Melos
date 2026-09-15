@@ -1,6 +1,7 @@
 package com.example.spotads.ui.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -10,10 +11,12 @@ import androidx.compose.ui.unit.sp
 import com.example.spotads.R
 
 // Variable fonts: one file per family, weight selected via FontVariation.
+@OptIn(ExperimentalTextApi::class)
 private fun spaceGrotesk(weight: FontWeight) = FontFamily(
     Font(R.font.space_grotesk, weight = weight, variationSettings = FontVariation.Settings(FontVariation.weight(weight.weight)))
 )
 
+@OptIn(ExperimentalTextApi::class)
 private fun dmSans(weight: FontWeight) = FontFamily(
     Font(R.font.dm_sans, weight = weight, variationSettings = FontVariation.Settings(FontVariation.weight(weight.weight)))
 )
