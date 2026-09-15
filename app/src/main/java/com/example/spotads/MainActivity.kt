@@ -89,7 +89,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
             .padding(horizontal = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        TopAppBar(title = { Text("spotAds") })
+        TopAppBar(title = { Text("Melos") })
 
         Spacer(Modifier.height(8.dp))
 
