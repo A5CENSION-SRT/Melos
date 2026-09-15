@@ -42,6 +42,8 @@ class AdMuteListenerService : NotificationListenerService() {
             private set
         @Volatile var todayAdCount: Int = 0
             private set
+        @Volatile var lifetimeAdCount: Int = 0
+            private set
 
         private var listener: StatusListener? = null
 
@@ -57,8 +59,9 @@ class AdMuteListenerService : NotificationListenerService() {
             listener?.onStatusChanged(state, event)
         }
 
-        private fun updateTodayCount(count: Int) {
-            todayAdCount = count
+        private fun updateCounts(today: Int, lifetime: Int) {
+            todayAdCount = today
+            lifetimeAdCount = lifetime
         }
     }
 
@@ -74,6 +77,7 @@ class AdMuteListenerService : NotificationListenerService() {
     // muted manually) — restore must only ever undo a mute we caused ourselves.
     private var weMuted = false
     private var pendingAdCount = 0
+    private var lastAdSignature: String? = null
     private var restoreRunnable: Runnable? = null
 
     private val sessionsChangedListener = MediaSessionManager.OnActiveSessionsChangedListener {
@@ -95,7 +99,7 @@ class AdMuteListenerService : NotificationListenerService() {
         audioManager = getSystemService(AudioManager::class.java)
         componentName = ComponentName(this, AdMuteListenerService::class.java)
 
-        updateTodayCount(AdMutePrefs.todayMutedCount(applicationContext))
+        updateCounts(AdMutePrefs.todayMutedCount(applicationContext), AdMutePrefs.lifetimeMutedCount(applicationContext))
         AdMutePrefs.registerChangeListener(applicationContext, prefsListener)
 
         mediaSessionManager.addOnActiveSessionsChangedListener(sessionsChangedListener, componentName)
@@ -174,14 +178,31 @@ class AdMuteListenerService : NotificationListenerService() {
             title?.lowercase()?.contains("advertisement") == true
     }
 
+    // Identifies which ad a piece of metadata belongs to. Spotify fires
+    // onMetadataChanged many times per ad slide (artwork loading, position
+    // updates, etc.) with the same artist/title — without this, every one of
+    // those repeats was being counted and logged as a brand-new ad.
+    private fun adSignature(metadata: MediaMetadata?): String {
+        val artist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: ""
+        val title = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: ""
+        val duration = metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: -1L
+        return "$artist|$title|$duration"
+    }
+
     private fun handleMetadataChanged(metadata: MediaMetadata?) {
         if (!AdMutePrefs.isEnabled(applicationContext)) {
             return
         }
         if (isAdMetadata(metadata)) {
-            pendingAdCount++
-            updateTodayCount(AdMutePrefs.incrementMutedCount(applicationContext))
             cancelPendingRestore()
+            val signature = adSignature(metadata)
+            if (weMuted && signature == lastAdSignature) {
+                // Same ad re-posting metadata, not a new ad — nothing to count or log.
+                return
+            }
+            lastAdSignature = signature
+            pendingAdCount++
+            updateCounts(AdMutePrefs.incrementMutedCount(applicationContext), AdMutePrefs.lifetimeMutedCount(applicationContext))
             if (!weMuted) {
                 muteMusicStream()
             }
@@ -197,10 +218,14 @@ class AdMuteListenerService : NotificationListenerService() {
     }
 
     private fun schedulePendingRestore() {
-        report(AdMuteState.PENDING_RESTORE, "Ad metadata cleared — debouncing restore")
+        cancelPendingRestore()
+        if (currentState != AdMuteState.PENDING_RESTORE) {
+            report(AdMuteState.PENDING_RESTORE, "Ad metadata cleared — debouncing restore")
+        }
         val runnable = Runnable {
             restoreVolume()
             pendingAdCount = 0
+            lastAdSignature = null
             report(AdMuteState.NORMAL, "Restored after debounce")
         }
         restoreRunnable = runnable
@@ -223,6 +248,7 @@ class AdMuteListenerService : NotificationListenerService() {
         cancelPendingRestore()
         restoreVolume()
         pendingAdCount = 0
+        lastAdSignature = null
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {

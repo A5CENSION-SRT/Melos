@@ -16,6 +16,7 @@ object AdMutePrefs {
     private const val KEY_ENABLED = "enabled"
     private const val KEY_COUNT = "muted_count"
     private const val KEY_COUNT_DATE = "muted_count_date"
+    private const val KEY_LIFETIME_COUNT = "lifetime_muted_count"
 
     fun isEnabledKey(key: String?): Boolean = key == KEY_ENABLED
 
@@ -37,13 +38,22 @@ object AdMutePrefs {
         return if (p.getString(KEY_COUNT_DATE, null) == todayString()) p.getInt(KEY_COUNT, 0) else 0
     }
 
+    /** Total ads muted since install. */
+    fun lifetimeMutedCount(context: Context): Int =
+        prefs(context).getInt(KEY_LIFETIME_COUNT, 0)
+
     /** Records one more muted ad and returns the new today-count. */
     fun incrementMutedCount(context: Context): Int {
         val p = prefs(context)
         val today = todayString()
         val current = if (p.getString(KEY_COUNT_DATE, null) == today) p.getInt(KEY_COUNT, 0) else 0
         val updated = current + 1
-        p.edit().putInt(KEY_COUNT, updated).putString(KEY_COUNT_DATE, today).apply()
+        val lifetime = p.getInt(KEY_LIFETIME_COUNT, 0) + 1
+        p.edit()
+            .putInt(KEY_COUNT, updated)
+            .putString(KEY_COUNT_DATE, today)
+            .putInt(KEY_LIFETIME_COUNT, lifetime)
+            .apply()
         return updated
     }
 
